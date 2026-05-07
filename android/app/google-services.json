@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "607527844560",
+    "project_id": "dashboard-baf3f",
+    "storage_bucket": "dashboard-baf3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607527844560:android:494f19173006ff81c03cd5",
+        "android_client_info": {
+          "package_name": "com.cervus.dashboard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSTYBgXETTOIN9r4XhiBP08051TCGlls8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
