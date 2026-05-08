@@ -21,10 +21,16 @@ class Visit {
     this.appId,
   });
 
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
   factory Visit.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    // In collectionGroup queries, we can get parent userId from reference if structured as users/{userId}/visits
     String parsedUserId = '';
     if (doc.reference.parent.parent != null) {
       parsedUserId = doc.reference.parent.parent!.id;
@@ -34,10 +40,10 @@ class Visit {
       id: doc.id,
       userId: parsedUserId,
       durationSeconds: data['durationSeconds'] as int?,
-      lastUpdate: (data['lastUpdate'] as Timestamp?)?.toDate(),
+      lastUpdate: _parseDate(data['lastUpdate']),
       appVersion: data['appVersion']?.toString(),
       platform: data['platform']?.toString(),
-      timestamp: (data['timestamp'] as Timestamp?)?.toDate(),
+      timestamp: _parseDate(data['timestamp']),
       appId: data['appId']?.toString(),
     );
   }

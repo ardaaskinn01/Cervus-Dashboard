@@ -7,7 +7,7 @@ class UserProfile {
   final DateTime? registrationDate;
   final String? platform;
   final String? appId;
-  final String? appVersion; // Eklendi
+  final String? appVersion;
   final DateTime? createdAt;
   final bool? isMigrated;
 
@@ -18,18 +18,26 @@ class UserProfile {
     this.registrationDate,
     this.platform,
     this.appId,
-    this.appVersion, // Eklendi
+    this.appVersion,
     this.createdAt,
     this.isMigrated,
   });
 
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
   factory UserProfile.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    // Fallback logic for field names
+    // Fallback logic for field names with safe parsing
     final String? pAppVersion = data['lastVersion']?.toString() ?? data['appVersion']?.toString();
-    final DateTime? pRegDate = (data['registrationDate'] as Timestamp?)?.toDate() ?? (data['lastVisit'] as Timestamp?)?.toDate();
-    final DateTime? pCreatedAt = (data['createdAt'] as Timestamp?)?.toDate() ?? pRegDate;
+    
+    final DateTime? pRegDate = _parseDate(data['registrationDate']) ?? _parseDate(data['lastVisit']);
+    final DateTime? pCreatedAt = _parseDate(data['createdAt']) ?? pRegDate;
 
     return UserProfile(
       id: doc.id,
@@ -40,7 +48,7 @@ class UserProfile {
       appId: data['appId']?.toString(),
       appVersion: pAppVersion,
       createdAt: pCreatedAt,
-      isMigrated: data['isMigrated'] as bool? ?? (data.containsKey('appId')), // appId varsa yeni sistemle bir bağ kurmuştur
+      isMigrated: data['isMigrated'] as bool? ?? (data.containsKey('appId')),
     );
   }
 }
