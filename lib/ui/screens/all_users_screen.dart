@@ -109,7 +109,7 @@ class AllUsersScreen extends StatelessWidget {
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [
-                                          Icon(p.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.android, size: 14, color: Colors.white54),
+                                          Icon(p.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.smartphone, size: 14, color: Colors.white54),
                                           const SizedBox(width: 4),
                                           Text(p.appId?.toUpperCase() ?? '-', style: const TextStyle(color: AppTheme.secondaryColor, fontWeight: FontWeight.bold, fontSize: 11)),
                                           const SizedBox(width: 12),

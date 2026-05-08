@@ -317,6 +317,15 @@ class _DashboardLayoutState extends State<DashboardLayout> {
               mainAxisAlignment: isDesktop && !_isSidebarExpanded ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 if (_isSidebarExpanded || !isDesktop) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/logo.jpg',
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                   const SizedBox(width: 14),
                   const Expanded(
                     child: Text(
@@ -327,6 +336,16 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                         letterSpacing: 1.2,
                         height: 1.1,
                       ),
+                    ),
+                  ),
+                ] else ...[
+                   ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/logo.jpg',
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ],

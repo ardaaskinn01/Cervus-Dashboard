@@ -45,7 +45,7 @@ class OverviewScreen extends StatelessWidget {
             final avgDuration = validDurations.isEmpty ? 0 : validDurations.reduce((a, b) => a + b) / validDurations.length;
 
             final iosVisits = fVisits.where((v) => v.platform?.toLowerCase() == 'ios').length;
-            final androidVisits = fVisits.where((v) => v.platform?.toLowerCase() == 'android').length;
+            final androidVisits = fVisits.where((v) => v.platform?.toLowerCase() != 'ios').length;
 
             return SafeArea(
               top: false,
@@ -78,7 +78,7 @@ class OverviewScreen extends StatelessWidget {
                       children: [
                         _buildPlatformBox('iOS', iosVisits, totalVisits, Icons.apple, Colors.white70),
                         const SizedBox(width: 20),
-                        _buildPlatformBox('Android', androidVisits, totalVisits, Icons.android, Colors.greenAccent),
+                        _buildPlatformBox('Mobil/Diğer', androidVisits, totalVisits, Icons.smartphone, Colors.blueGrey),
                       ],
                     ),
 

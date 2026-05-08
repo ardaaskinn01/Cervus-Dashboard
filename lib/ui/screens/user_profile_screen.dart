@@ -83,7 +83,7 @@ class UserProfileScreen extends StatelessWidget {
                   runSpacing: 20,
                   children: [
                     _buildInfoColumn('Uygulama', profile.appId?.toUpperCase() ?? '-', Icons.apps),
-                    _buildInfoColumn('Platform', profile.platform?.toUpperCase() ?? '-', profile.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.android),
+                    _buildInfoColumn('Platform', profile.platform?.toUpperCase() ?? '-', profile.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.smartphone),
                     _buildInfoColumn('Versiyon', profile.appVersion ?? '-', Icons.info_outline),
                     _buildInfoColumn('Kayıt Tarihi', dateStr, Icons.calendar_today),
                     _buildInfoColumn('Durum', (profile.isMigrated ?? false) ? 'Aktif' : 'Beklemede', Icons.verified_user),

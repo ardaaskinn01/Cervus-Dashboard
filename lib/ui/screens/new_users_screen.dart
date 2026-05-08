@@ -73,7 +73,7 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
         final growthRate = totalPrev == 0 ? 100.0 : ((totalCurrent - totalPrev) / totalPrev) * 100;
 
         final iosUsers = currentPeriodUsers.where((p) => p.platform?.toLowerCase() == 'ios').length;
-        final androidUsers = currentPeriodUsers.where((p) => p.platform?.toLowerCase() == 'android').length;
+        final androidUsers = currentPeriodUsers.where((p) => p.platform?.toLowerCase() != 'ios').length;
 
         // Uygulamalara Göre Dağılım Map
         final Map<String, int> appDistribution = {};
@@ -132,9 +132,9 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
                     SizedBox(
                       width: 250,
                       child: KpiCard(
-                        title: 'Android Platformu',
+                        title: 'Mobil/Diğer Platform',
                         value: androidUsers.toString(),
-                        icon: Icons.android,
+                        icon: Icons.smartphone,
                         iconColor: Colors.greenAccent,
                       ),
                     ),

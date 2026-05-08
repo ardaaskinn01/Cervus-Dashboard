@@ -120,7 +120,7 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      Icon(v.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.android, size: 14, color: Colors.white54),
+                                      Icon(v.platform?.toLowerCase() == 'ios' ? Icons.apple : Icons.smartphone, size: 14, color: Colors.white54),
                                       const SizedBox(width: 4),
                                       _buildPillBadge(v.appId ?? '-', AppTheme.secondaryColor),
                                       const SizedBox(width: 12),
@@ -171,7 +171,7 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
           dropdownColor: AppTheme.bgColorStart,
           style: const TextStyle(color: Colors.white, fontSize: 13),
           onChanged: (v) => setState(() => _internalPlatformFilter = v!),
-          items: ['Hepsi', 'iOS', 'Android'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+          items: ['Hepsi', 'iOS', 'Diğer'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
         ),
       ),
     );
