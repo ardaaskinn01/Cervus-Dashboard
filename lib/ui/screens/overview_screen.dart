@@ -154,8 +154,9 @@ class OverviewScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(label, style: const TextStyle(color: Colors.white54)),
-                Text('$count Ziyaret', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Flexible(child: Text(label, style: const TextStyle(color: Colors.white54), overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 8),
+                Flexible(child: Text('$count Ziyaret', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
               ],
             ),
           ],
