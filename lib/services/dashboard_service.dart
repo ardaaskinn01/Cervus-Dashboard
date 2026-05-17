@@ -33,6 +33,18 @@ class DashboardService {
     });
   }
 
+  // Get stream for visits of a specific app
+  Stream<List<Visit>> getVisitsForAppStream(String appId) {
+    if (appId == 'Hepsi') return getVisitsStream();
+    return _firestore
+        .collectionGroup('visits')
+        .where('appId', isEqualTo: appId.toLowerCase()) // Lowercase eklendi
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => Visit.fromFirestore(doc)).toList();
+    });
+  }
+
   // Get stream for all user profiles
   Stream<List<UserProfile>> getProfilesStream() {
     return _firestore.collection(profilesCollection).snapshots().map((snapshot) {

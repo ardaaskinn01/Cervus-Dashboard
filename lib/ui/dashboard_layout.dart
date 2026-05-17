@@ -1,9 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'screens/overview_screen.dart';
 import 'screens/app_details_screen.dart';
 import 'screens/new_users_screen.dart';
 import 'screens/all_users_screen.dart';
+import 'screens/comparison_screen.dart';
 import '../theme/app_theme.dart';
 import '../models/date_filter.dart';
 
@@ -32,7 +32,9 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       case 2:
         return NewUsersScreen(dateFilter: _globalFilter, appIdFilter: _selectedAppId);
       case 3:
-        return AppDetailsScreen(dateFilter: _globalFilter, appIdFilter: _selectedAppId); 
+        return AppDetailsScreen(appId: _selectedAppId, dateFilter: _globalFilter); 
+      case 4:
+        return const ComparisonScreen();
       default:
         return OverviewScreen(dateFilter: _globalFilter, appIdFilter: _selectedAppId);
     }
@@ -44,6 +46,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       case 1: return 'Tüm Kullanıcılar';
       case 2: return 'Yeni Kullanıcılar';
       case 3: return 'Ziyaret ve Oturumlar';
+      case 4: return 'Karşılaştırma Analizi';
       default: return '';
     }
   }
@@ -74,12 +77,12 @@ class _DashboardLayoutState extends State<DashboardLayout> {
           child: _buildSidebar(isDesktop: false),
         ),
         body: Row(
-          crossAxisAlignment: CrossAxisAlignment.start, // Sidebar ve İçeriği tepeye yasla
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (isDesktop) _buildSidebar(isDesktop: true),
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.start, // Dikeyde en baştan başla
+                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildHeader(isDesktop),
@@ -114,14 +117,15 @@ class _DashboardLayoutState extends State<DashboardLayout> {
             )
           else
             const SizedBox(),
-          if (_selectedIndex != 2)
+          if (_selectedIndex != 4)
             Flexible(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Flexible(child: _buildAppFilter()),
                   const SizedBox(width: 8),
-                  Flexible(child: _buildGlobalDateFilter()),
+                  if (_selectedIndex != 2) // NewUsersScreen kendi iç periyot filtresini kullandığı için global tarih filtresini gizleyebiliriz veya onu da açabiliriz. Ama kullanıcı "app seçebilelim" dediği için sadece app filtresi kritik.
+                    Flexible(child: _buildGlobalDateFilter()),
                 ],
               ),
             ),
@@ -182,7 +186,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                     _globalFilter = DateFilter(type: val, date: _globalFilter.date);
                   });
                   if (val != DateFilterType.allTime) {
-                    _pickDate(val); // Burası dropdown değişince tetikler
+                    _pickDate(val);
                   }
                 }
               },
@@ -199,7 +203,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
             const SizedBox(width: 4),
             Flexible(
               child: InkWell(
-                onTap: () => _pickDate(_globalFilter.type), // Burası metne tıklayınca tetikler
+                onTap: () => _pickDate(_globalFilter.type),
                 child: Text(
                   _globalFilter.type == DateFilterType.daily 
                     ? "${_globalFilter.date.day}/${_globalFilter.date.month}"
@@ -217,7 +221,6 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
   Future<void> _pickDate(DateFilterType type) async {
     if (type == DateFilterType.monthly) {
-      // Custom Month Picker Dialog
       final selectedDate = await showDialog<DateTime>(
         context: context,
         builder: (context) {
@@ -265,7 +268,6 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         setState(() => _globalFilter = DateFilter(type: type, date: selectedDate));
       }
     } else {
-      // Standard Daily Picker
       final picked = await showDatePicker(
         context: context,
         initialDate: _globalFilter.date,
@@ -308,7 +310,6 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       ),
       child: Column(
         children: [
-          // Logo Section
           Container(
             height: 100,
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -319,34 +320,19 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                 if (_isSidebarExpanded || !isDesktop) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/logo.jpg',
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                    ),
+                    child: Image.asset('assets/logo.jpg', width: 40, height: 40, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 14),
                   const Expanded(
                     child: Text(
                       'CERVUS\nSTUDIO',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                        height: 1.1,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.2, height: 1.1),
                     ),
                   ),
                 ] else ...[
-                   ClipRRect(
+                  ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/logo.jpg',
-                      width: 32,
-                      height: 32,
-                      fit: BoxFit.cover,
-                    ),
+                    child: Image.asset('assets/logo.jpg', width: 32, height: 32, fit: BoxFit.cover),
                   ),
                 ],
               ],
@@ -365,34 +351,17 @@ class _DashboardLayoutState extends State<DashboardLayout> {
           const Divider(color: AppTheme.borderColor, indent: 20, endIndent: 20),
           const SizedBox(height: 10),
 
-          _buildMenuItem(
-            index: 0,
-            icon: Icons.grid_view_rounded,
-            title: 'Genel Bakış',
-          ),
-          _buildMenuItem(
-            index: 1,
-            icon: Icons.people_outline_rounded,
-            title: 'Tüm Kullanıcılar',
-          ),
-          _buildMenuItem(
-            index: 2,
-            icon: Icons.person_add_rounded,
-            title: 'Yeni Kullanıcılar',
-          ),
-          _buildMenuItem(
-            index: 3,
-            icon: Icons.history_toggle_off_rounded,
-            title: 'Ziyaret ve Oturumlar',
-          ),
+          _buildMenuItem(index: 0, icon: Icons.grid_view_rounded, title: 'Genel Bakış'),
+          _buildMenuItem(index: 1, icon: Icons.people_outline_rounded, title: 'Tüm Kullanıcılar'),
+          _buildMenuItem(index: 2, icon: Icons.person_add_rounded, title: 'Yeni Kullanıcılar'),
+          _buildMenuItem(index: 3, icon: Icons.history_toggle_off_rounded, title: 'Ziyaret ve Oturumlar'),
+          _buildMenuItem(index: 4, icon: Icons.compare_arrows_rounded, title: 'Karşılaştırma'),
           
           const Spacer(),
-          
-          // Version info
           if (_isSidebarExpanded || !isDesktop)
             Container(
               padding: const EdgeInsets.all(20),
-              child: const Text('v1.1.0 Stable', style: TextStyle(color: Colors.white24, fontSize: 11)),
+              child: const Text('v1.2.0 Pro', style: TextStyle(color: Colors.white24, fontSize: 11)),
             ),
         ],
       ),
@@ -424,19 +393,16 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   ],
                 )
               : null,
-            border: isSelected ? Border.all(color: AppTheme.primaryColor.withOpacity(0.5), width: 1) : null,
-            boxShadow: isSelected 
-              ? [BoxShadow(color: AppTheme.primaryColor.withOpacity(0.1), blurRadius: 10, spreadRadius: -2)] 
-              : null,
           ),
           child: Row(
             mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                color: isSelected ? AppTheme.secondaryColor : Colors.white54,
-                size: 22,
-              ),
+              // Sol vurgu çizgisi (Sadece seçiliyse ve sidebar açıksa)
+              if (isSelected && isExpanded)
+                Container(width: 3, height: 20, decoration: BoxDecoration(color: AppTheme.secondaryColor, borderRadius: BorderRadius.circular(2))),
+              if (isSelected && isExpanded) const SizedBox(width: 12),
+              
+              Icon(icon, color: isSelected ? AppTheme.secondaryColor : Colors.white54, size: 22),
               if (isExpanded) ...[
                 const SizedBox(width: 16),
                 Text(

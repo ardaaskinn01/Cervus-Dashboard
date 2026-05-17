@@ -37,13 +37,16 @@ class UserProfile {
     final String? pAppVersion = data['lastVersion']?.toString() ?? data['appVersion']?.toString();
     
     final DateTime? pRegDate = _parseDate(data['registrationDate']) ?? _parseDate(data['lastVisit']);
-    final DateTime? pCreatedAt = _parseDate(data['createdAt']) ?? pRegDate;
+    // migratedAt son çare olarak eklendi — createdAt veya registrationDate olmayan kullanıcılar (ör. Yağmur)
+    // için migratedAt fallback olarak kullanılır. Yoksa tüm tarih filtreleri bu kullanıcıları gizler.
+    final DateTime? pMigratedAt = _parseDate(data['migratedAt']);
+    final DateTime? pCreatedAt = _parseDate(data['createdAt']) ?? pRegDate ?? pMigratedAt;
 
     return UserProfile(
       id: doc.id,
       originalName: data['originalName']?.toString() ?? data['name']?.toString(),
       age: data['age'] is int ? data['age'] as int : null,
-      registrationDate: pRegDate,
+      registrationDate: pRegDate ?? pMigratedAt,
       platform: data['platform']?.toString(),
       appId: data['appId']?.toString(),
       appVersion: pAppVersion,

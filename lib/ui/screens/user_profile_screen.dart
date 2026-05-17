@@ -74,8 +74,12 @@ class UserProfileScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Kullanıcı ID: ${profile.id}',
+                  (profile.originalName == null || profile.originalName!.trim().isEmpty) ? 'Anonim' : profile.originalName!,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                Text(
+                  'ID: ${profile.id}',
+                  style: const TextStyle(fontSize: 12, color: Colors.white38),
                 ),
                 const SizedBox(height: 24),
                 Wrap(

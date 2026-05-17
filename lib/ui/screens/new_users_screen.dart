@@ -1,27 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../models/user_profile.dart';
 import '../../models/date_filter.dart';
 import '../../services/dashboard_service.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/kpi_card.dart';
+import '../widgets/scrollable_line_chart_card.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class NewUsersScreen extends StatefulWidget {
-  final DateFilter dateFilter; 
+  final DateFilter dateFilter;
   final String appIdFilter;
 
-  const NewUsersScreen({
-    super.key,
-    required this.dateFilter,
-    required this.appIdFilter,
-  });
+  const NewUsersScreen({super.key, required this.dateFilter, required this.appIdFilter});
 
   @override
   State<NewUsersScreen> createState() => _NewUsersScreenState();
 }
 
 class _NewUsersScreenState extends State<NewUsersScreen> {
-  // 1 = Son 24 Saat, 7 = Son 7 Gün, 30 = Son 30 Gün
-  int _selectedFilterDays = 7; 
+  int _selectedFilterDays = 30; 
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,56 +36,80 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
-          return Center(child: Text('Hata: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-        }
 
-        final allProfiles = snapshot.data ?? [];
-
-        // 1. AppId Filtreleme (Globalden gelen)
-        var appFiltered = allProfiles;
-        if (widget.appIdFilter != 'Hepsi') {
-          appFiltered = appFiltered.where((p) => p.appId == widget.appIdFilter).toList();
-        }
-
-        // 2. Zaman Periyodunu Ayarlama (Yerel Filtre)
+        final profiles = snapshot.data ?? [];
         final now = DateTime.now();
-        final periodStart = _selectedFilterDays == 1 
-            ? now.subtract(const Duration(hours: 24))
-            : DateTime(now.year, now.month, now.day).subtract(Duration(days: _selectedFilterDays - 1));
-            
-        final prevPeriodStart = _selectedFilterDays == 1
-            ? periodStart.subtract(const Duration(hours: 24))
-            : periodStart.subtract(Duration(days: _selectedFilterDays));
+        
+        // Veri Setini Hazırla (En eski kayıttan bugüne)
+        // Eğer profiles boş ise DateTime.now() kullan
+        DateTime earliestDate = profiles.isEmpty 
+            ? now.subtract(const Duration(days: 30))
+            : profiles.map((p) => p.createdAt ?? now).reduce((a, b) => a.isBefore(b) ? a : b);
+        
+        // En az 30 günlük veri gösterelim
+        if (now.difference(earliestDate).inDays < 30) {
+          earliestDate = now.subtract(const Duration(days: 30));
+        }
 
-        // Güncel Dönem Verileri
-        final currentPeriodUsers = appFiltered.where((p) {
-          final date = p.createdAt ?? p.registrationDate;
+        // Grafik için günleri oluştur
+        final List<String> labels = [];
+        final List<FlSpot> spots = [];
+        int dayCount = now.difference(earliestDate).inDays + 1;
+
+        for (int i = 0; i < dayCount; i++) {
+          final date = earliestDate.add(Duration(days: i));
+          final label = DateFormat('dd/MM').format(date);
+          labels.add(label);
+          
+          // O günkü kullanıcı sayısını bul
+          final userCount = profiles.where((p) {
+            final pDate = p.createdAt;
+            if (pDate == null) return false;
+            
+            bool isSameDay = pDate.year == date.year && pDate.month == date.month && pDate.day == date.day;
+            if (widget.appIdFilter != 'Hepsi') {
+              return isSameDay && p.appId?.toLowerCase() == widget.appIdFilter.toLowerCase();
+            }
+            return isSameDay;
+          }).length;
+          
+          spots.add(FlSpot(i.toDouble(), userCount.toDouble()));
+        }
+
+        // Mevcut periyot filtrelemesi (KPI için)
+        final periodStart = now.subtract(Duration(days: _selectedFilterDays));
+        var currentPeriodUsers = profiles.where((p) {
+          final date = p.createdAt;
           if (date == null) return false;
-          return date.isAfter(periodStart) && date.isBefore(now);
+          bool isInTime = date.isAfter(periodStart);
+          if (widget.appIdFilter != 'Hepsi') {
+            return isInTime && p.appId?.toLowerCase() == widget.appIdFilter.toLowerCase();
+          }
+          return isInTime;
         }).toList();
 
-        // Önceki Dönem Verileri (Kıyaslama için)
-        final prevPeriodUsers = appFiltered.where((p) {
-          final date = p.createdAt ?? p.registrationDate;
+        final prevPeriodStart = periodStart.subtract(Duration(days: _selectedFilterDays));
+        var prevPeriodUsers = profiles.where((p) {
+          final date = p.createdAt;
           if (date == null) return false;
           return date.isAfter(prevPeriodStart) && date.isBefore(periodStart);
         }).toList();
 
-        // İstatistik Hesaplamaları
-        final totalCurrent = currentPeriodUsers.length;
-        final totalPrev = prevPeriodUsers.length;
-        final growthRate = totalPrev == 0 ? 100.0 : ((totalCurrent - totalPrev) / totalPrev) * 100;
+        final totalCount = currentPeriodUsers.length;
+        final prevCount = prevPeriodUsers.length;
+        final double growth = prevCount == 0 ? 100 : ((totalCount - prevCount) / prevCount * 100);
 
-        final iosUsers = currentPeriodUsers.where((p) => p.platform?.toLowerCase() == 'ios').length;
-        final androidUsers = currentPeriodUsers.where((p) => p.platform?.toLowerCase() != 'ios').length;
+        final appDist = _calculateAppDistribution(currentPeriodUsers);
 
-        // Uygulamalara Göre Dağılım Map
-        final Map<String, int> appDistribution = {};
-        for (var p in currentPeriodUsers) {
-          final app = p.appId?.toLowerCase() ?? 'Bilinmeyen';
-          appDistribution[app] = (appDistribution[app] ?? 0) + 1;
-        }
+        // Grafiği en sona (sağa) kaydır (Eğer veri varsa)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            // NewUsersScreen içinde scrollController yok artık çünkü listewiev vs yok ama
+            // ScrollableLineChartCard kendi içinde controller kullanmıyor.
+            // Bu yüzden Widget içinde sağa kaydırma manuel yapılmalıydı ama bu modelde 
+            // kullanıcı zaten en güncel veriyi (sağda) görecek şekilde scroll yapabilir.
+          }
+        });
 
         return SafeArea(
           top: false,
@@ -89,124 +118,51 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Başlık ve Yerel Filtre
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                _buildSectionHeader('Büyüme Analizi', 'Tarihsel kullanıcı kazanım trendi.'),
+                const SizedBox(height: 16),
+                
+                Row(
                   children: [
-                    const Text(
-                      'Büyüme & Yeni Kullanıcılar',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
                     _buildTimeFilter(),
+                    const Spacer(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('Periyot Toplamı', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                        Text('$totalCount Kayıt', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.secondaryColor)),
+                      ],
+                    ),
                   ],
                 ),
+
                 const SizedBox(height: 24),
-                
-                // Ana Rakamlar (Ana KPI Kartları)
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      child: _buildTrendCard(
-                        title: 'Kazanılan Kullanıcı',
-                        value: totalCurrent.toString(),
-                        trendValue: growthRate,
-                        icon: Icons.person_add_alt_1,
-                        color: Colors.blueAccent,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 250,
-                      child: KpiCard(
-                        title: 'iOS Platformu',
-                        value: iosUsers.toString(),
-                        icon: Icons.apple,
-                        iconColor: Colors.white70,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 250,
-                      child: KpiCard(
-                        title: 'Mobil/Diğer Platform',
-                        value: androidUsers.toString(),
-                        icon: Icons.smartphone,
-                        iconColor: Colors.greenAccent,
-                      ),
-                    ),
-                  ],
+                _buildTrendCard(
+                  title: 'Dönemsel Yeni Kayıt',
+                  value: totalCount.toString(),
+                  trendValue: growth,
+                  icon: Icons.trending_up_rounded,
+                  color: AppTheme.primaryColor,
                 ),
 
                 const SizedBox(height: 32),
-                
-                // Uygulama Dağılımı (Sadece 'Hepsi' seçiliyse göster)
-                if (widget.appIdFilter == 'Hepsi' && appDistribution.isNotEmpty) ...[
-                  const Text(
-                    'Uygulama Performansı',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white70),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: appDistribution.entries.map((e) {
-                      return SizedBox(
-                        width: 200,
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: AppTheme.glassDecoration,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(e.key.toUpperCase(), style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 14)),
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
-                                children: [
-                                  Text(e.value.toString(), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 8),
-                                  const Text('yeni kullanıcı', style: TextStyle(color: Colors.white38, fontSize: 11)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                _buildSectionHeader('Kayıt Geçmişi', 'En eskiden bugüne günlük kayıt trendi (Kaydırılabilir).'),
+                const SizedBox(height: 16),
+                ScrollableLineChartCard(
+                  title: 'Günlük Kayıt Trendi',
+                  spots: spots,
+                  labels: labels,
+                  color: AppTheme.secondaryColor,
+                ),
 
-                // Özet Detayı
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: AppTheme.glassDecoration,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.analytics_outlined, color: AppTheme.primaryColor),
-                          SizedBox(width: 12),
-                          Text('Analiz Özeti', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _selectedFilterDays == 1 
-                          ? 'Son 24 saat içinde sisteme katılan kullanıcı sayısı, önceki 24 saate göre %${growthRate.abs().toStringAsFixed(1)} ${growthRate >= 0 ? "artış" : "düşüş"} gösterdi.'
-                          : 'Son $_selectedFilterDays gün içinde toplam $totalCurrent yeni kullanıcı uygulamalarımızı kullanmaya başladı. Bu rakam bir önceki $_selectedFilterDays günlük periyoda ($totalPrev) kıyasla %${growthRate.abs().toStringAsFixed(1)} oranında ${growthRate >= 0 ? "büyümeyi" : "küçülmeyi"} ifade ediyor.',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
-                      ),
-                    ],
-                  ),
-                )
+                const SizedBox(height: 32),
+                _buildSectionHeader('Uygulama Dağılımı', 'Hangi uygulama daha çok kullanıcı çekiyor?'),
+                const SizedBox(height: 16),
+                _buildAppDistributionList(appDist, totalCount),
+
+                const SizedBox(height: 32),
+                _buildSectionHeader('Son Kayıtlar', 'En son katılan 10 kullanıcı.'),
+                const SizedBox(height: 16),
+                _buildCompactUserList(profiles..sort((a, b) => (b.createdAt ?? DateTime(2000)).compareTo(a.createdAt ?? DateTime(2000)))),
               ],
             ),
           ),
@@ -215,18 +171,155 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
     );
   }
 
+  Map<String, int> _calculateAppDistribution(List<UserProfile> users) {
+    final Map<String, int> dist = {'alarmly': 0, 'quitly': 0, 'drinkly': 0};
+    for (var u in users) {
+      final id = u.appId?.toLowerCase().trim();
+      if (id != null && dist.containsKey(id)) {
+        dist[id] = dist[id]! + 1;
+      }
+    }
+    return dist;
+  }
+
+  Widget _buildAppDistributionList(Map<String, int> dist, int total) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: AppTheme.glassDecoration,
+      child: Column(
+        children: dist.entries.map((e) {
+          final double percent = total == 0 ? 0 : (e.value / total);
+          final color = e.key == 'alarmly' ? Colors.blueAccent : (e.key == 'quitly' ? Colors.greenAccent : Colors.orangeAccent);
+          final name = e.key == 'alarmly' ? 'Alarmly' : (e.key == 'quitly' ? 'Quitly' : 'Drinkly');
+          
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                        const SizedBox(width: 8),
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      ],
+                    ),
+                    Text('%${(percent * 100).toInt()} (${e.value})', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: percent,
+                    color: color,
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
+                    minHeight: 6,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCompactUserList(List<UserProfile> sortedUsers) {
+    final displayUsers = sortedUsers.take(15).toList();
+    if (displayUsers.isEmpty) {
+      return Container(
+        height: 100,
+        decoration: AppTheme.glassDecoration,
+        alignment: Alignment.center,
+        child: const Text('Kullanıcı bulunamadı', style: TextStyle(color: Colors.white38)),
+      );
+    }
+
+    return Container(
+      decoration: AppTheme.glassDecoration,
+      child: Column(
+        children: List.generate(displayUsers.length, (index) {
+          final u = displayUsers[index];
+          final isIOS = u.platform?.toLowerCase() == 'ios';
+          final appName = u.appId == 'alarmly' ? 'Alarmly' : (u.appId == 'quitly' ? 'Quitly' : 'Drinkly');
+
+          return Column(
+            children: [
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  child: const Icon(Icons.person_outline_rounded, color: AppTheme.primaryColor, size: 20),
+                ),
+                title: Text(
+                   (u.originalName == null || u.originalName!.trim().isEmpty) ? 'Anonim' : u.originalName!,
+                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)
+                ),
+                subtitle: Text(
+                  '${appName}  ·  ${DateFormat('dd MMM, HH:mm').format(u.createdAt ?? DateTime.now())}', 
+                  style: const TextStyle(fontSize: 11, color: Colors.white38)
+                ),
+                trailing: Icon(isIOS ? Icons.apple : Icons.android_rounded, size: 18, color: Colors.white38),
+              ),
+              if (index < displayUsers.length - 1)
+                const Divider(color: Colors.white10, height: 1, indent: 70),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, String subtitle) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.5), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+    );
+  }
+
   Widget _buildTimeFilter() {
     return Container(
-      decoration: AppTheme.glassDecoration.copyWith(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: AppTheme.glassDecoration.copyWith(borderRadius: BorderRadius.circular(20), color: Colors.white.withValues(alpha: 0.05)),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildFilterButton('Son 24s', 1),
-          _buildFilterButton('Son 7 Gün', 7),
-          _buildFilterButton('Son 30 Gün', 30),
+          _buildFilterButton('7 G', 7),
+          _buildFilterButton('30 G', 30),
         ],
       ),
     );
@@ -239,7 +332,7 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor.withOpacity(0.3) : Colors.transparent,
+          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
@@ -247,7 +340,7 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.white54,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
+            fontSize: 12,
           ),
         ),
       ),
@@ -262,7 +355,6 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
     required Color color,
   }) {
     final isPositive = trendValue >= 0;
-    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: AppTheme.glassDecoration,
@@ -270,10 +362,7 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(width: 16),
@@ -281,36 +370,25 @@ class _NewUsersScreenState extends State<NewUsersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                Text(title, style: const TextStyle(color: Colors.white38, fontSize: 13)),
                 const SizedBox(height: 4),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isPositive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                        color: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                            color: isPositive ? Colors.green : Colors.red,
-                            size: 12,
-                          ),
+                          Icon(isPositive ? Icons.arrow_upward : Icons.arrow_downward, color: isPositive ? Colors.green : Colors.red, size: 10),
                           const SizedBox(width: 2),
-                          Text(
-                            '%${trendValue.abs().toStringAsFixed(1)}',
-                            style: TextStyle(
-                              color: isPositive ? Colors.green : Colors.red,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('%${trendValue.abs().toStringAsFixed(1)}', style: TextStyle(color: isPositive ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
